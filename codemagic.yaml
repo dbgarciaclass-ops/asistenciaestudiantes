@@ -1,0 +1,63 @@
+workflows:
+  android-release:
+    name: Android Release Build
+    instance_type: linux_x2
+    max_build_duration: 120
+    environment:
+      java: default
+      ndk: r25b
+    triggering:
+      events:
+        - push
+      branch:
+        patterns:
+          - pattern: main
+            include: true
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build APK
+        script: flutter build apk --release --split-per-abi
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+      - build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+      - build/app/outputs/flutter-apk/app-x86_64-release.apk
+    publishing:
+      email:
+        recipients:
+          - $ADMIN_EMAIL
+        notify:
+          success: true
+          failure: true
+
+  ios-release:
+    name: iOS Release Build
+    instance_type: mac_mini_m2
+    max_build_duration: 180
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.liceojacinto.asistenciaestudiantes
+    triggering:
+      events:
+        - push
+      branch:
+        patterns:
+          - pattern: main
+            include: true
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign
+    artifacts:
+      - build/ios/iphoneos/Runner.app
+    publishing:
+      email:
+        recipients:
+          - $ADMIN_EMAIL
+        notify:
+          success: true
+          failure: true
