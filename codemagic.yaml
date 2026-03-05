@@ -26,7 +26,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - $ADMIN_EMAIL
+          - dbgarcia@liceojacintodelaconcha.com
         notify:
           success: true
           failure: true
@@ -57,7 +57,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - $ADMIN_EMAIL
+          - dbgarcia@liceojacintodelaconcha.com
         notify:
           success: true
           failure: true
