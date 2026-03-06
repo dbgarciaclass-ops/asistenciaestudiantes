@@ -204,73 +204,294 @@ class _LoginScreenState extends State<LoginScreen> {
     final usuarioController = TextEditingController();
     final passwordController = TextEditingController();
     bool cargando = false;
+    bool mostrarPassword = false;
     String? error;
 
     @override
     Widget build(BuildContext context) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Login')),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextField(
-                controller: usuarioController,
-                decoration: const InputDecoration(labelText: 'Correo electrónico'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              TextField(
-                controller: passwordController,
-                decoration: const InputDecoration(labelText: 'Contraseña'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
-              cargando
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      child: const Text('Iniciar sesión'),
-                      onPressed: () async {
-                        final email = usuarioController.text.trim().toLowerCase();
-                        setState(() => cargando = true);
-                        final loginResult = await ApiService.login(
-                          email,
-                          passwordController.text,
-                        );
-                        setState(() => cargando = false);
-                        if (loginResult['success'] == true) {
-                          print('Login exitoso, datos user: ${loginResult['user']}');
-                          final user = loginResult['user'];
-                          final role = user['role'];
-                          
-                          if (role == 'docente') {
-                            final docenteIdRaw = user['docente_id'];
-                            final docenteId = docenteIdRaw is int ? docenteIdRaw : int.parse(docenteIdRaw.toString());
-                            print('Docente ID obtenido: $docenteId (tipo: ${docenteId.runtimeType})');
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SelectAulaFechaScreen(docenteId: docenteId),
-                              ),
-                            );
-                          } else if (role == 'coordinador' || role == 'admin') {
-                            print('Coordinador/Admin logged in: ${user['name']}');
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ResumenAsistenciaScreen(userName: user['name']),
-                              ),
-                            );
-                          } else {
-                            setState(() => error = 'Rol no soportado en esta aplicación');
-                          }
-                        } else {
-                          setState(() => error = loginResult['message']);
-                        }
-                      },
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF1e3c72),  // Azul oscuro
+                Color(0xFF2a5298),  // Azul medio
+                Color(0xFF7aa8d8),  // Azul claro
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo y título
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 30),
+                      child: Column(
+                        children: [
+                          // Círculo con ícono
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.95),
+                              borderRadius: BorderRadius.circular(50),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.school,
+                              size: 60,
+                              color: Color(0xFF2a5298),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Asistencia Estudiantes',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Liceo Jacinto de la Concha',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Color(0xFFb3d9ff),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-            ],
+
+                    // Formulario
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 25),
+                      padding: const EdgeInsets.all(30),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Iniciar Sesión',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1e3c72),
+                            ),
+                          ),
+                          const SizedBox(height: 25),
+
+                          // Email input
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFf5f7fa),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFe0e0e0),
+                              ),
+                            ),
+                            child: TextField(
+                              controller: usuarioController,
+                              decoration: InputDecoration(
+                                hintText: 'Correo electrónico',
+                                hintStyle: const TextStyle(color: Color(0xFF999999)),
+                                prefixIcon: const Icon(
+                                  Icons.email_outlined,
+                                  color: Color(0xFF2a5298),
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 15,
+                                  vertical: 15,
+                                ),
+                              ),
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+
+                          // Password input
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFf5f7fa),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFe0e0e0),
+                              ),
+                            ),
+                            child: TextField(
+                              controller: passwordController,
+                              obscureText: !mostrarPassword,
+                              decoration: InputDecoration(
+                                hintText: 'Contraseña',
+                                hintStyle: const TextStyle(color: Color(0xFF999999)),
+                                prefixIcon: const Icon(
+                                  Icons.lock_outlined,
+                                  color: Color(0xFF2a5298),
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    mostrarPassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: const Color(0xFF2a5298),
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      mostrarPassword = !mostrarPassword;
+                                    });
+                                  },
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 15,
+                                  vertical: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Error message
+                          if (error != null)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFffe0e0),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFff6b6b)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Color(0xFFff6b6b),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      error!,
+                                      style: const TextStyle(
+                                        color: Color(0xFFc92a2a),
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 20),
+
+                          // Login button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: cargando
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF2a5298),
+                                      ),
+                                    ),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: () async {
+                                      final email = usuarioController.text.trim().toLowerCase();
+                                      if (email.isEmpty || passwordController.text.isEmpty) {
+                                        setState(() {
+                                          error = 'Por favor completa todos los campos';
+                                        });
+                                        return;
+                                      }
+
+                                      setState(() {
+                                        cargando = true;
+                                        error = null;
+                                      });
+
+                                      final loginResult = await ApiService.login(
+                                        email,
+                                        passwordController.text,
+                                      );
+                                      setState(() => cargando = false);
+
+                                      if (loginResult['success'] == true) {
+                                        final user = loginResult['user'];
+                                        final role = user['role'];
+                                        
+                                        if (role == 'docente') {
+                                          final docenteIdRaw = user['docente_id'];
+                                          final docenteId = docenteIdRaw is int ? docenteIdRaw : int.parse(docenteIdRaw.toString());
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => SelectAulaFechaScreen(docenteId: docenteId),
+                                            ),
+                                          );
+                                        } else if (role == 'coordinador' || role == 'admin') {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => ResumenAsistenciaScreen(userName: user['name']),
+                                            ),
+                                          );
+                                        } else {
+                                          setState(() => error = 'Rol no soportado en esta aplicación');
+                                        }
+                                      } else {
+                                        setState(() => error = loginResult['message']);
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF2a5298),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 5,
+                                    ),
+                                    child: const Text(
+                                      'Iniciar Sesión',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );
