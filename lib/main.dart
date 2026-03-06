@@ -2,11 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 
-// URL de la API Laravel
-// Producción: 'https://www.liceojacintodelaconcha.com/api'
-// Emulador Android (apunta a localhost del host): 'http://10.0.2.2:8001/api'
-const String apiUrl = 'http://10.0.2.2:8001/api';
+// URL de API para builds de distribución.
+const String apiUrl = 'https://www.liceojacintodelaconcha.com/api';
+const Duration requestTimeout = Duration(seconds: 20);
 
 class ApiService {
   static Future<Map<String, dynamic>> login(String email, String password) async {
@@ -21,7 +21,7 @@ class ApiService {
           'email': email,
           'password': password,
         }),
-      );
+      ).timeout(requestTimeout);
       print('Login response: ${response.statusCode}');
       print('Login body: ${response.body}');
       if (response.statusCode == 200) {
@@ -41,6 +41,8 @@ class ApiService {
         } catch (_) {}
         return {'success': false, 'message': 'Error ${response.statusCode}: ${response.body}'};
       }
+    } on TimeoutException {
+      return {'success': false, 'message': 'Tiempo de espera agotado. Verifica tu conexion.'};
     } catch (e) {
       print('Login error: $e');
       return {'success': false, 'message': 'Error de conexión: $e'};
@@ -55,7 +57,7 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
         },
-      );
+      ).timeout(requestTimeout);
       print('Respuesta aulas: ${response.statusCode}');
       print('Body: ${response.body}');
       if (response.statusCode == 200) {
@@ -76,7 +78,7 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
         },
-      );
+      ).timeout(requestTimeout);
       print('Respuesta aulas coordinador: ${response.statusCode}');
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -96,7 +98,7 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
         },
-      );
+      ).timeout(requestTimeout);
       print('Respuesta resumen: ${response.statusCode}');
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -116,7 +118,7 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
         },
-      );
+      ).timeout(requestTimeout);
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
@@ -141,7 +143,7 @@ class ApiService {
           'fecha': fecha,
           'sesion': sesion,
         }),
-      );
+      ).timeout(requestTimeout);
       print('Respuesta asistencia: ${response.statusCode} - ${response.body}');
       return response.statusCode == 201;
     } catch (e) {
@@ -163,7 +165,7 @@ class ApiService {
           'sesion': sesion,
           'asistencias': asistencias,
         }),
-      );
+      ).timeout(requestTimeout);
       print('Respuesta batch: ${response.statusCode} - ${response.body}');
       return response.statusCode == 201;
     } catch (e) {
@@ -234,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 30),
                       child: Column(
                         children: [
-                          // Círculo con ícono
+                          // Círculo con logo institucional
                           Container(
                             width: 100,
                             height: 100,
@@ -249,10 +251,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.school,
-                              size: 60,
-                              color: Color(0xFF2a5298),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(50),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Image.asset(
+                                  'assets/logo.jpeg',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 20),
