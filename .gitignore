@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Archivos de firma y seguridad - NUNCA subir estos archivos
+/android/key.properties
+/android/keystore/
+*.jks
+*.keystore
+*.p12
+*.pem

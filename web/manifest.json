@@ -1,13 +1,16 @@
 {
-    "name": "asistenciaestudiantes",
-    "short_name": "asistenciaestudiantes",
-    "start_url": ".",
+    "name": "Asistencia Estudiantes - Liceo Jacinto de la Concha",
+    "short_name": "Asistencia",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1e3c72",
+    "theme_color": "#2a5298",
+    "description": "Sistema de registro de asistencia para Liceo Jacinto de la Concha",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "scope": "/",
+    "categories": ["education", "productivity"],
+    "lang": "es",
     "icons": [
         {
             "src": "icons/Icon-192.png",
