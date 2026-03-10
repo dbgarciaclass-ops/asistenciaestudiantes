@@ -1,5 +1,30 @@
 # asistenciaestudiantes
 
+## Versionado de la APK
+
+La APK ahora debe manejarse con la versión declarada en `pubspec.yaml`.
+
+Ejemplo actual:
+
+```yaml
+version: 1.1.0+2
+```
+
+- `1.1.0` es la versión visible para el usuario.
+- `2` es el build number interno y debe incrementarse en cada APK nueva.
+
+Para generar una nueva APK versionada:
+
+```powershell
+flutter build apk --release
+```
+
+Si necesitas forzar una versión puntual durante el build:
+
+```powershell
+flutter build apk --release --build-name=1.1.1 --build-number=3
+```
+
 A new Flutter project.
 
 ## Getting Started

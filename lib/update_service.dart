@@ -7,6 +7,11 @@ import 'dart:convert';
 /// Servicio para verificar actualizaciones de la app
 class UpdateService {
   static const String _updateCheckUrl = 'https://www.liceojacintodelaconcha.com/api/app-version';
+
+  static Future<String> getInstalledVersionLabel() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    return '${packageInfo.version}+${packageInfo.buildNumber}';
+  }
   
   /// Verificar si hay actualizaciones disponibles
   static Future<UpdateInfo?> checkForUpdates() async {
@@ -25,7 +30,7 @@ class UpdateService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final latestVersion = data['version'] as String?;
-        final latestBuildNumber = data['build_number'] as int?;
+        final latestBuildNumber = _parseBuildNumber(data['build_number']);
         final downloadUrl = data['download_url'] as String?;
         final isForced = data['force_update'] as bool? ?? false;
         final releaseNotes = data['release_notes'] as String?;
@@ -34,8 +39,12 @@ class UpdateService {
           return null;
         }
         
-        // Comparar versiones usando build number
-        if (latestBuildNumber > currentBuildNumber) {
+        if (_isRemoteVersionNewer(
+          currentVersion: currentVersion,
+          currentBuildNumber: currentBuildNumber,
+          latestVersion: latestVersion,
+          latestBuildNumber: latestBuildNumber,
+        )) {
           return UpdateInfo(
             currentVersion: currentVersion,
             latestVersion: latestVersion,
@@ -53,6 +62,53 @@ class UpdateService {
       debugPrint('Error al verificar actualizaciones: $e');
       return null;
     }
+  }
+
+  static int? _parseBuildNumber(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
+  static bool _isRemoteVersionNewer({
+    required String currentVersion,
+    required int currentBuildNumber,
+    required String latestVersion,
+    required int latestBuildNumber,
+  }) {
+    if (latestBuildNumber != currentBuildNumber) {
+      return latestBuildNumber > currentBuildNumber;
+    }
+
+    return _compareVersions(latestVersion, currentVersion) > 0;
+  }
+
+  static int _compareVersions(String left, String right) {
+    final leftParts = _extractVersionNumbers(left);
+    final rightParts = _extractVersionNumbers(right);
+    final maxLength = leftParts.length > rightParts.length ? leftParts.length : rightParts.length;
+
+    for (var index = 0; index < maxLength; index++) {
+      final leftValue = index < leftParts.length ? leftParts[index] : 0;
+      final rightValue = index < rightParts.length ? rightParts[index] : 0;
+
+      if (leftValue != rightValue) {
+        return leftValue.compareTo(rightValue);
+      }
+    }
+
+    return 0;
+  }
+
+  static List<int> _extractVersionNumbers(String version) {
+    return RegExp(r'\d+')
+        .allMatches(version)
+        .map((match) => int.tryParse(match.group(0) ?? '0') ?? 0)
+        .toList();
   }
   
   /// Mostrar diálogo de actualización disponible
@@ -119,7 +175,7 @@ class UpdateService {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              updateInfo.currentVersion,
+                              updateInfo.currentVersionLabel,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -141,7 +197,7 @@ class UpdateService {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              updateInfo.latestVersion,
+                              updateInfo.latestVersionLabel,
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -240,6 +296,9 @@ class UpdateInfo {
   final String downloadUrl;
   final bool isForced;
   final String? releaseNotes;
+
+  String get currentVersionLabel => '$currentVersion+$currentBuildNumber';
+  String get latestVersionLabel => '$latestVersion+$latestBuildNumber';
 
   UpdateInfo({
     required this.currentVersion,
