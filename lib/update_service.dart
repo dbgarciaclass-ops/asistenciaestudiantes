@@ -258,13 +258,21 @@ class UpdateService {
                 ),
               ElevatedButton.icon(
                 onPressed: () async {
+                  bool opened = false;
+
                   if (updateInfo.downloadUrl.isNotEmpty) {
-                    final uri = Uri.parse(updateInfo.downloadUrl);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    }
+                    opened = await _openDownloadUrl(updateInfo.downloadUrl);
                   }
-                  if (!updateInfo.isForced && context.mounted) {
+
+                  if (!opened && context.mounted) {
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      const SnackBar(
+                        content: Text('No se pudo abrir la descarga. Intenta desde el navegador.'),
+                      ),
+                    );
+                  }
+
+                  if ((!updateInfo.isForced || opened) && context.mounted) {
                     Navigator.of(context).pop();
                   }
                 },
@@ -284,6 +292,28 @@ class UpdateService {
         );
       },
     );
+  }
+
+  static Future<bool> _openDownloadUrl(String rawUrl) async {
+    try {
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+      final separator = rawUrl.contains('?') ? '&' : '?';
+      final urlWithVersion = '$rawUrl${separator}v=$cacheBuster';
+      final uri = Uri.parse(urlWithVersion);
+
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        return true;
+      }
+
+      if (await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication)) {
+        return true;
+      }
+
+      return await launchUrl(uri, mode: LaunchMode.platformDefault);
+    } catch (e) {
+      debugPrint('Error abriendo enlace de actualización: $e');
+      return false;
+    }
   }
 }
 
