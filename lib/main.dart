@@ -11,8 +11,8 @@ import 'update_service.dart';
 import 'app_theme.dart';
 
 // URL de API por entorno.
-// - Debug: backend local para pruebas seguras sin tocar producciÃ³n.
-// - Release: backend de producciÃ³n.
+// - Debug: backend local para pruebas seguras sin tocar producción.
+// - Release: backend de producción.
 // Se puede sobrescribir con: --dart-define=API_URL=...
 const String _prodApiUrl = 'https://www.liceojacintodelaconcha.com/api';
 const String _devApiUrl = 'http://127.0.0.1:8000/api';
@@ -30,7 +30,7 @@ void debugLog(String message) {
 }
 
 class ApiService {
-  /// Obtener headers con autenticaciÃ³n
+  /// Obtener headers con autenticación
   static Future<Map<String, String>> _getAuthHeaders() async {
     final token = await SecureAuthService.getToken();
     return {
@@ -85,7 +85,7 @@ class ApiService {
       return {'success': false, 'message': 'Tiempo de espera agotado. Verifica tu conexion.'};
     } catch (e) {
       debugLog('Login error: $e');
-      return {'success': false, 'message': 'Error de conexiÃ³n'};
+      return {'success': false, 'message': 'Error de conexión'};
     }
   }
 
@@ -101,7 +101,7 @@ class ApiService {
       }
       debugLog('Error obtener aulas: ${response.statusCode}');
     } catch (e) {
-      debugLog('Error de conexiÃ³n al obtener aulas');
+      debugLog('Error de conexión al obtener aulas');
     }
     return [];
   }
@@ -124,7 +124,7 @@ class ApiService {
         ).timeout(requestTimeout);
 
         if (response.statusCode != 200) {
-          debugLog('Endpoint ${uri.path}?${uri.query} respondiÃ³ ${response.statusCode}');
+          debugLog('Endpoint ${uri.path}?${uri.query} respondió ${response.statusCode}');
           continue;
         }
 
@@ -144,7 +144,7 @@ class ApiService {
         }
       }
     } catch (e) {
-      debugLog('Error de conexiÃ³n al obtener aulas para $normalizedRole: $e');
+      debugLog('Error de conexión al obtener aulas para $normalizedRole: $e');
     }
     return [];
   }
@@ -275,7 +275,7 @@ class ApiService {
       debugLog('Error obtener resumen: ${response.statusCode}');
       return {};
     } catch (e) {
-      debugLog('Error de conexiÃ³n al obtener resumen');
+      debugLog('Error de conexión al obtener resumen');
       return {};
     }
   }
@@ -292,7 +292,7 @@ class ApiService {
       }
       debugLog('Error obtener estudiantes: ${response.statusCode}');
     } catch (e) {
-      debugLog('Error de conexiÃ³n al obtener estudiantes');
+      debugLog('Error de conexión al obtener estudiantes');
     }
     return [];
   }
@@ -465,7 +465,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _checkAutoLogin();
     }
 
-    /// Verificar si hay sesiÃ³n activa y redirigir automÃ¡ticamente
+    /// Verificar si hay sesión activa y redirigir automáticamente
     Future<void> _checkAutoLogin() async {
       final isLoggedIn = await SecureAuthService.isLoggedIn();
       if (!isLoggedIn || !mounted) return;
@@ -475,7 +475,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final role = userData['role'];
       
-      // Redirigir segÃºn el rol
+      // Redirigir según el rol
       if (role == 'docente' && userData['docente_id'] != null) {
         Navigator.pushReplacement(
           context,
@@ -522,12 +522,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo y tÃ­tulo
+                    // Logo y titulo
                     Container(
                       padding: const EdgeInsets.symmetric(vertical: 30),
                       child: Column(
                         children: [
-                          // CÃ­rculo con logo institucional
+                          // Circulo con logo institucional
                           Container(
                             width: 100,
                             height: 100,
@@ -593,7 +593,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         children: [
                           const Text(
-                            'Iniciar SesiÃ³n',
+                            'Iniciar Sesión',
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -614,7 +614,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: TextField(
                               controller: usuarioController,
                               decoration: InputDecoration(
-                                hintText: 'Correo electrÃ³nico',
+                                hintText: 'Correo electrónico',
                                 hintStyle: const TextStyle(color: Color(0xFF999999)),
                                 prefixIcon: const Icon(
                                   Icons.email_outlined,
@@ -646,7 +646,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: passwordController,
                               obscureText: !mostrarPassword,
                               decoration: InputDecoration(
-                                hintText: 'ContraseÃ±a',
+                                hintText: 'Contraseña',
                                 hintStyle: const TextStyle(color: Color(0xFF999999)),
                                 prefixIcon: const Icon(
                                   Icons.lock_outlined,
@@ -722,7 +722,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : ElevatedButton(
                                     onPressed: () async {
-                                      // ValidaciÃ³n robusta de entrada
+                                      // Validación robusta de entrada
                                       final emailError = InputValidator.validateEmail(usuarioController.text);
                                       if (emailError != null) {
                                         setState(() {
@@ -778,7 +778,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           );
                                         } else {
-                                          setState(() => error = 'Rol no soportado en esta aplicaciÃ³n');
+                                          setState(() => error = 'Rol no soportado en esta aplicación');
                                         }
                                       } else {
                                         setState(() => error = loginResult['message']);
@@ -792,7 +792,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       elevation: 5,
                                     ),
                                     child: const Text(
-                                      'Iniciar SesiÃ³n',
+                                      'Iniciar Sesión',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -899,7 +899,7 @@ class _LoginScreenState extends State<LoginScreen> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.exit_to_app_rounded),
-                  tooltip: 'Cerrar sesiÃ³n',
+                  tooltip: 'Cerrar sesión',
                   onPressed: () async {
                     await SecureAuthService.logout();
                     if (!context.mounted) return;
@@ -1005,7 +1005,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 24),
 
-                              // SelecciÃ³n de aula y materia
+                              // Selección de aula y materia
                               AppTheme.buildSectionHeader(
                                 title: 'Aula y Materia',
                                 icon: Icons.menu_book_rounded,
@@ -1082,7 +1082,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 24),
 
-                              // SelecciÃ³n de fecha
+                              // Selección de fecha
                               AppTheme.buildSectionHeader(
                                 title: 'Fecha',
                                 icon: Icons.calendar_today_rounded,
@@ -1161,9 +1161,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 24),
 
-                              // SelecciÃ³n de sesiÃ³n
+                              // Selección de sesión
                               AppTheme.buildSectionHeader(
-                                title: 'SesiÃ³n de Clase',
+                                title: 'Sesión de Clase',
                                 icon: Icons.schedule_rounded,
                               ),
                               const SizedBox(height: 12),
@@ -1238,7 +1238,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 32),
 
-                              // BotÃ³n continuar
+                              // Botón continuar
                               AppTheme.buildPrimaryButton(
                                 text: 'Continuar al Registro',
                                 icon: Icons.arrow_forward_rounded,
@@ -1348,7 +1348,7 @@ class _LoginScreenState extends State<LoginScreen> {
         };
       }).toList();
 
-      // Enviar todas las asistencias en una sola peticiÃ³n
+      // Enviar todas las asistencias en una sola petición
       final resultado = await ApiService.registrarAsistenciasBatch(
         asistenciasList,
         widget.fecha.toLocal().toString().split(' ')[0],
@@ -1380,7 +1380,7 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.info_outline_rounded),
-              tooltip: 'InformaciÃ³n',
+              tooltip: 'Información',
               onPressed: () {
                 showDialog(
                   context: context,
@@ -1390,7 +1390,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Icon(Icons.info_outline_rounded, color: AppTheme.primaryColor),
                         SizedBox(width: 8),
-                        Text('InformaciÃ³n'),
+                        Text('Información'),
                       ],
                     ),
                     content: Column(
@@ -1401,7 +1401,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (widget.aula['materia_nombre'] != null)
                           _buildInfoRow('Materia:', widget.aula['materia_nombre']),
                         _buildInfoRow('Fecha:', _formatFecha(widget.fecha)),
-                        _buildInfoRow('SesiÃ³n:', 'SesiÃ³n ${widget.sesion}'),
+                        _buildInfoRow('Sesión:', 'Sesión ${widget.sesion}'),
                         _buildInfoRow('Estudiantes:', '${estudiantes.length}'),
                       ],
                     ),
@@ -1417,7 +1417,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.exit_to_app_rounded),
-              tooltip: 'Cerrar sesiÃ³n',
+              tooltip: 'Cerrar sesión',
               onPressed: () async {
                 await SecureAuthService.logout();
                 if (!context.mounted) return;
@@ -1434,7 +1434,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  // Header con informaciÃ³n
+                  // Header con información
                   Container(
                     padding: const EdgeInsets.all(AppTheme.paddingMedium),
                     decoration: BoxDecoration(
@@ -1532,7 +1532,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   
-                  // Ãrea fija inferior
+                  // Area fija inferior
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -1926,7 +1926,7 @@ class _LoginScreenState extends State<LoginScreen> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.exit_to_app_rounded),
-                  tooltip: 'Cerrar sesiÃ³n',
+                  tooltip: 'Cerrar sesión',
                   onPressed: () async {
                     await SecureAuthService.logout();
                     if (!context.mounted) return;
@@ -1983,7 +1983,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           const Text(
-                                            'Consulta la asistencia por aula, fecha y sesiÃ³n.',
+                                            'Consulta la asistencia por aula, fecha y sesión.',
                                             style: TextStyle(
                                               color: AppTheme.textSecondary,
                                             ),
@@ -2017,7 +2017,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 24),
                           AppTheme.buildSectionHeader(
                             title: 'Filtros de consulta',
-                            subtitle: 'Selecciona el grupo y la sesiÃ³n que deseas revisar.',
+                            subtitle: 'Selecciona el grupo y la sesión que deseas revisar.',
                             icon: Icons.tune_rounded,
                           ),
                           const SizedBox(height: 12),
@@ -2117,7 +2117,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   items: sesiones
                                       .map((sessionValue) => DropdownMenuItem(
                                             value: sessionValue,
-                                            child: Text('SesiÃ³n $sessionValue'),
+                                            child: Text('Sesión $sessionValue'),
                                           ))
                                       .toList(),
                                   onChanged: (value) {
@@ -2126,7 +2126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     }
                                   },
                                   decoration: _buildInputDecoration(
-                                    label: 'SesiÃ³n de clase',
+                                    label: 'Sesión de clase',
                                     icon: Icons.schedule_rounded,
                                   ),
                                 ),
@@ -2243,7 +2243,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AppTheme.buildSectionHeader(
-                title: 'EstadÃ­sticas de Asistencia',
+                title: 'Estadisticas de Asistencia',
                 subtitle: 'Vista consolidada del grupo seleccionado.',
                 icon: Icons.bar_chart_rounded,
               ),
@@ -2329,7 +2329,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               AppTheme.buildSectionHeader(
                 title: 'Detalles de Estudiantes',
-                subtitle: 'Estado individual para la sesiÃ³n consultada.',
+                subtitle: 'Estado individual para la sesión consultada.',
                 icon: Icons.groups_rounded,
               ),
               const SizedBox(height: 12),
@@ -2401,4 +2401,5 @@ class _LoginScreenState extends State<LoginScreen> {
       return estado[0].toUpperCase() + estado.substring(1);
     }
   }
+
 
