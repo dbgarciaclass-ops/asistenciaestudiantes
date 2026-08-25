@@ -2343,6 +2343,13 @@ class _LoginScreenState extends State<LoginScreen> {
         resumenAsistencia = resultado;
         consultando = false;
       });
+
+      final aviso = resultado['aviso']?.toString();
+      if (aviso != null && aviso.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(aviso), duration: const Duration(seconds: 5)),
+        );
+      }
     }
 
     @override
