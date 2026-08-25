@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'auth_service.dart';
 import 'network_service.dart';
 import 'input_validator.dart';
@@ -21,6 +23,15 @@ final String apiUrl = _apiUrlFromEnv.isNotEmpty
   ? _apiUrlFromEnv
   : (kReleaseMode ? _prodApiUrl : _devApiUrl);
 const Duration requestTimeout = Duration(seconds: 20);
+
+/// Fecha local en formato API `Y-m-d` (evita desfase UTC de toIso8601String).
+String formatFechaApi(DateTime fecha) {
+  final local = fecha.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
 
 // Helper para logging seguro solo en modo debug
 void debugLog(String message) {
@@ -270,13 +281,24 @@ class ApiService {
         headers: headers,
       ).timeout(requestTimeout);
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final data = json.decode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+        return {'success': false, 'message': 'Respuesta invalida del servidor'};
       }
+      String message = 'Error al consultar asistencia (${response.statusCode})';
+      try {
+        final data = json.decode(response.body);
+        if (data is Map && data['message'] != null) {
+          message = data['message'].toString();
+        }
+      } catch (_) {}
       debugLog('Error obtener resumen: ${response.statusCode}');
-      return {};
+      return {'success': false, 'message': message};
     } catch (e) {
       debugLog('Error de conexión al obtener resumen');
-      return {};
+      return {'success': false, 'message': 'Error de conexion al consultar asistencia'};
     }
   }
 
@@ -297,7 +319,63 @@ class ApiService {
     return [];
   }
 
-  static Future<bool> registrarAsistencia(int estudianteId, String estado, String fecha, int sesion) async {
+  static Future<Map<String, dynamic>> subirFotoEstudiante(
+    int estudianteId,
+    String filePath,
+    String origen,
+  ) async {
+    try {
+      final token = await SecureAuthService.getToken();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$apiUrl/estudiantes/$estudianteId/foto'),
+      );
+      request.headers['Accept'] = 'application/json';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.fields['origen'] = origen;
+      request.files.add(await http.MultipartFile.fromPath('foto', filePath));
+
+      final streamedResponse = await request.send().timeout(requestTimeout);
+      final body = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode == 201) {
+        final data = json.decode(body);
+        return {
+          'success': true,
+          'foto_url': data['foto_url']?.toString() ?? '',
+          'message': data['message']?.toString() ?? 'Foto registrada correctamente.',
+        };
+      }
+
+      try {
+        final data = json.decode(body);
+        if (data is Map && data['message'] != null) {
+          return {'success': false, 'message': data['message'].toString()};
+        }
+      } catch (_) {}
+
+      return {
+        'success': false,
+        'message': 'No se pudo subir la foto (código ${streamedResponse.statusCode}).',
+      };
+    } on TimeoutException {
+      return {'success': false, 'message': 'Tiempo de espera agotado al subir la foto.'};
+    } catch (e) {
+      debugLog('Error al subir foto de estudiante: $e');
+      return {'success': false, 'message': 'Error de conexión al subir la foto.'};
+    }
+  }
+
+  static Future<bool> registrarAsistencia(
+    int estudianteId,
+    String estado,
+    String fecha,
+    int sesion, {
+    required int materiaId,
+    int? aulaId,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
@@ -308,6 +386,8 @@ class ApiService {
           'estado': estado.toLowerCase(),
           'fecha': fecha,
           'sesion': sesion,
+          'materia_id': materiaId,
+          if (aulaId != null) 'aula_id': aulaId,
         }),
       ).timeout(requestTimeout);
       return response.statusCode == 201;
@@ -322,6 +402,7 @@ class ApiService {
     String fecha,
     int sesion, {
     required int materiaId,
+    int? aulaId,
   }) async {
     try {
       final headers = await _getAuthHeaders();
@@ -332,6 +413,7 @@ class ApiService {
           'fecha': fecha,
           'sesion': sesion,
           'materia_id': materiaId,
+          if (aulaId != null) 'aula_id': aulaId,
           'asistencias': asistencias,
         }),
       ).timeout(requestTimeout);
@@ -752,7 +834,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                         email,
                                         password,
                                       );
+
+                                      if (!mounted) return;
                                       setState(() => cargando = false);
+
+                                      if (!context.mounted) return;
 
                                       if (loginResult['success'] == true) {
                                         final user = loginResult['user'];
@@ -953,7 +1039,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Contacte al administrador',
+                                      'No tiene asignaciones aula-materia en el sistema. '
+                                      'Pida al administrador que configure sus materias en cada aula '
+                                      '(tabla de docentes por aula) para el año escolar activo.',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         color: Colors.grey.shade600,
                                       ),
@@ -1039,6 +1128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     return DropdownMenuItem(
                                       value: aula,
                                       child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Container(
                                             width: 40,
@@ -1054,14 +1144,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              nombreCompleto,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w500,
+                                          Flexible(
+                                            fit: FlexFit.loose,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 280),
+                                              child: Text(
+                                                nombreCompleto,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                                softWrap: false,
                                               ),
-                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                         ],
@@ -1244,6 +1339,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: Icons.arrow_forward_rounded,
                                 width: double.infinity,
                                 onPressed: () {
+                                  if (aulaSeleccionada == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Selecciona un aula y materia')),
+                                    );
+                                    return;
+                                  }
+
+                                  final materiaIdRaw = aulaSeleccionada['materia_id'];
+                                  final materiaId = materiaIdRaw is int
+                                      ? materiaIdRaw
+                                      : int.tryParse('${materiaIdRaw ?? ''}');
+                                  if (materiaId == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Esta aula no tiene materia asociada. '
+                                          'El administrador debe asignarle materias en el aula.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
                                   Navigator.push(
                                     context,
                                     PageRouteBuilder(
@@ -1338,6 +1456,9 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         return;
       }
+
+      final aulaIdRaw = widget.aula['aula_id'] ?? widget.aula['id'];
+      final aulaId = aulaIdRaw is int ? aulaIdRaw : int.tryParse('${aulaIdRaw ?? ''}');
       
       // Preparar todas las asistencias para enviar en lote
       final asistenciasList = estudiantes.map((estudiante) {
@@ -1348,12 +1469,21 @@ class _LoginScreenState extends State<LoginScreen> {
         };
       }).toList();
 
+      if (asistenciasList.isEmpty) {
+        setState(() {
+          guardando = false;
+          mensaje = 'No hay estudiantes para registrar en esta aula.';
+        });
+        return;
+      }
+
       // Enviar todas las asistencias en una sola petición
       final resultado = await ApiService.registrarAsistenciasBatch(
         asistenciasList,
-        widget.fecha.toLocal().toString().split(' ')[0],
+        formatFechaApi(widget.fecha),
         widget.sesion,
         materiaId: materiaId,
+        aulaId: aulaId,
       );
 
       setState(() {
@@ -1518,9 +1648,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: AsistenciaItem(
+                              estudianteId: estudiante['id'] as int?,
                               nombre: estudiante['nombre'] ?? 
                                       estudiante['nombre_completo'] ?? 
                                       estudiante.toString(),
+                              fotoUrl: estudiante['foto_url'],
+                              onFotoActualizada: (nuevaUrl) {
+                                setState(() {
+                                  estudiante['foto_url'] = nuevaUrl;
+                                });
+                              },
                               onChanged: (estado) {
                                 setState(() {
                                   asistencias[estudiante['id']] = estado;
@@ -1649,9 +1786,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   class AsistenciaItem extends StatefulWidget {
+    final int? estudianteId;
     final String nombre;
+    final String? fotoUrl;
+    final void Function(String nuevaFotoUrl)? onFotoActualizada;
     final void Function(String estado)? onChanged;
-    const AsistenciaItem({super.key, required this.nombre, this.onChanged});
+    const AsistenciaItem({
+      super.key,
+      required this.nombre,
+      this.estudianteId,
+      this.fotoUrl,
+      this.onFotoActualizada,
+      this.onChanged,
+    });
 
     @override
     State<AsistenciaItem> createState() => _AsistenciaItemState();
@@ -1659,6 +1806,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   class _AsistenciaItemState extends State<AsistenciaItem> {
     String estado = 'Presente';
+    bool _subiendoFoto = false;
+    final ImagePicker _imagePicker = ImagePicker();
     final Map<String, Map<String, dynamic>> estadosConfig = {
       'Presente': {
         'color': AppTheme.successColor,
@@ -1682,6 +1831,288 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     };
 
+    Future<void> _elegirYSubirFoto(ImageSource source) async {
+      if (widget.estudianteId == null) {
+        _mostrarMensaje('No se pudo identificar al estudiante.', esError: true);
+        return;
+      }
+
+      try {
+        final imagen = await _imagePicker.pickImage(
+          source: source,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 85,
+        );
+
+        if (imagen == null) {
+          return;
+        }
+
+        final confirmar = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Confirmar foto de ${widget.nombre}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    File(imagen.path),
+                    fit: BoxFit.cover,
+                    height: 220,
+                    width: double.infinity,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '¿Desea registrar esta foto en el expediente del estudiante?',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Registrar foto'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmar != true) {
+          return;
+        }
+
+        setState(() => _subiendoFoto = true);
+
+        final origen = source == ImageSource.camera ? 'camara' : 'galeria';
+        final resultado = await ApiService.subirFotoEstudiante(
+          widget.estudianteId!,
+          imagen.path,
+          origen,
+        );
+
+        if (!mounted) return;
+
+        setState(() => _subiendoFoto = false);
+
+        if (resultado['success'] == true) {
+          final nuevaUrl = resultado['foto_url']?.toString() ?? '';
+          widget.onFotoActualizada?.call(nuevaUrl);
+          _mostrarMensaje(
+            resultado['message']?.toString() ?? 'Foto registrada correctamente.',
+          );
+        } else {
+          _mostrarMensaje(
+            resultado['message']?.toString() ?? 'No se pudo subir la foto.',
+            esError: true,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _subiendoFoto = false);
+          _mostrarMensaje('Error al capturar o subir la foto.', esError: true);
+        }
+      }
+    }
+
+    void _mostrarMensaje(String mensaje, {bool esError = false}) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: esError ? AppTheme.errorColor : AppTheme.successColor,
+        ),
+      );
+    }
+
+    void _mostrarOpcionesSinFoto() {
+      if (widget.estudianteId == null) {
+        _mostrarMensaje('No se pudo identificar al estudiante.', esError: true);
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Text(
+                    'Registrar foto de ${widget.nombre}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryColor),
+                  title: const Text('Tomar foto con cámara'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _elegirYSubirFoto(ImageSource.camera);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded, color: AppTheme.primaryColor),
+                  title: const Text('Elegir de galería'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _elegirYSubirFoto(ImageSource.gallery);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    void _mostrarFotoCompleta(BuildContext context) {
+      if (widget.fotoUrl == null || widget.fotoUrl!.isEmpty) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.nombre,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    widget.fotoUrl!,
+                    fit: BoxFit.contain,
+                    height: 320,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(Icons.person_rounded, size: 80);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget _buildAvatar() {
+      final hasFoto = widget.fotoUrl != null && widget.fotoUrl!.isNotEmpty;
+
+      return GestureDetector(
+        onTap: _subiendoFoto
+            ? null
+            : hasFoto
+                ? () => _mostrarFotoCompleta(context)
+                : _mostrarOpcionesSinFoto,
+        child: Stack(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _subiendoFoto
+                    ? const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : hasFoto
+                        ? Image.network(
+                            widget.fotoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.person_rounded,
+                                color: AppTheme.primaryColor,
+                                size: 24,
+                              );
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : const Icon(
+                            Icons.camera_alt_outlined,
+                            color: AppTheme.primaryColor,
+                            size: 22,
+                          ),
+              ),
+            ),
+            if (!hasFoto && !_subiendoFoto)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.add_a_photo_rounded,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     @override
     Widget build(BuildContext context) {
       return AppTheme.buildCard(
@@ -1698,19 +2129,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: AppTheme.primaryColor,
-                    size: 24,
-                  ),
-                ),
+                _buildAvatar(),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -1869,7 +2288,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       setState(() => consultando = true);
 
-      final format = fecha.toIso8601String().split('T')[0];
+      final format = formatFechaApi(fecha);
       final aulaIdRaw = aulaSeleccionada['aula_id'] ?? aulaSeleccionada['id'];
       final aulaId = aulaIdRaw is int ? aulaIdRaw : int.tryParse('$aulaIdRaw');
       if (aulaId == null) {
@@ -1885,12 +2304,40 @@ class _LoginScreenState extends State<LoginScreen> {
           ? null
           : (materiaIdRaw is int ? materiaIdRaw : int.tryParse('$materiaIdRaw'));
 
+      if (materiaId == null) {
+        setState(() => consultando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selecciona un aula con materia para consultar la asistencia.'),
+          ),
+        );
+        return;
+      }
+
       final resultado = await ApiService.obtenerResumenAsistencia(
         aulaId,
         format,
         sesion,
         materiaId: materiaId,
       );
+
+      if (!mounted) return;
+
+      if (resultado['success'] == false || resultado['estudiantes'] == null) {
+        setState(() {
+          resumenAsistencia = null;
+          consultando = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              resultado['message']?.toString() ??
+                  'No se pudo consultar la asistencia. Verifica conexion o permisos.',
+            ),
+          ),
+        );
+        return;
+      }
 
       setState(() {
         resumenAsistencia = resultado;
@@ -2346,7 +2793,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: estudiantes.length,
-                  separatorBuilder: (_, __) => const Divider(),
+                  separatorBuilder: (_, index) => const Divider(),
                   itemBuilder: (_, index) {
                     final est = estudiantes[index];
                     final estado = est['estado'] ?? 'no registrada';

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:http_certificate_pinning/http_certificate_pinning.dart';
 import 'package:http/http.dart' as http;
 
@@ -22,7 +23,7 @@ class SecureNetworkService {
     if (!isPinningConfigured) {
       // En producción, esto debería ser un error
       // Por ahora, solo logueamos una advertencia
-      print('⚠️ WARNING: Certificate pinning no configurado. Ver CONFIGURAR_SSL_PINNING.md');
+      debugPrint('WARNING: Certificate pinning no configurado. Ver CONFIGURAR_SSL_PINNING.md');
       _isPinningEnabled = false;
       return;
     }
@@ -37,9 +38,9 @@ class SecureNetworkService {
         timeout: 10,
       );
       _isPinningEnabled = true;
-      print('✅ Certificate pinning habilitado correctamente');
+      debugPrint('Certificate pinning habilitado correctamente');
     } catch (e) {
-      print('❌ Error al verificar certificate pinning: $e');
+      debugPrint('Error al verificar certificate pinning: $e');
       _isPinningEnabled = false;
       // En producción, podrías querer lanzar una excepción aquí
     }
@@ -83,7 +84,7 @@ class SecureNetworkService {
     // La librería http_certificate_pinning no soporta POST directamente
     // Usamos http normal para POST (el pinning se verifica en la inicialización)
     if (!isPinningConfigured) {
-      print('⚠️ WARNING: Certificate pinning no configurado para POST');
+      debugPrint('WARNING: Certificate pinning no configurado para POST');
     }
     
     return await http.post(

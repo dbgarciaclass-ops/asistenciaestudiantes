@@ -37,7 +37,7 @@ class AppTheme {
   // Sombras
   static List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.08),
+      color: Colors.black.withValues(alpha: 0.08),
       blurRadius: 20,
       offset: const Offset(0, 4),
     ),
@@ -45,7 +45,7 @@ class AppTheme {
 
   static List<BoxShadow> buttonShadow = [
     BoxShadow(
-      color: primaryColor.withOpacity(0.3),
+      color: primaryColor.withValues(alpha: 0.3),
       blurRadius: 15,
       offset: const Offset(0, 5),
     ),
@@ -95,7 +95,7 @@ class AppTheme {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
+                color: primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: primaryColor, size: 20),
@@ -127,7 +127,7 @@ class AppTheme {
               ],
             ),
           ),
-          if (trailing != null) trailing,
+          ?trailing,
         ],
       ),
     );
@@ -142,9 +142,9 @@ class AppTheme {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

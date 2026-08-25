@@ -117,8 +117,8 @@ class UpdateService {
       context: context,
       barrierDismissible: !updateInfo.isForced,
       builder: (BuildContext context) {
-        return WillPopScope(
-          onWillPop: () async => !updateInfo.isForced,
+        return PopScope(
+          canPop: !updateInfo.isForced,
           child: AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
