@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Allow HTTP to local Laravel in profile builds (cleartext still blocked in release). -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

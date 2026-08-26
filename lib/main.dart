@@ -13,16 +13,26 @@ import 'update_service.dart';
 import 'app_theme.dart';
 
 // URL de API por entorno.
-// - Debug: backend local para pruebas seguras sin tocar producción.
-// - Release: backend de producción.
-// Se puede sobrescribir con: --dart-define=API_URL=...
+// - Debug: backend local (Android emulator → 10.0.2.2; iOS/desktop → 127.0.0.1).
+// - Release: backend de producción (nunca se cambia por el default de debug).
+// - Override (dispositivo físico / otro host):
+//   flutter run --dart-define=API_URL=http://192.168.x.x:8000/api
 const String _prodApiUrl = 'https://www.liceojacintodelaconcha.com/api';
-const String _devApiUrl = 'http://127.0.0.1:8000/api';
 const String _apiUrlFromEnv = String.fromEnvironment('API_URL', defaultValue: '');
-final String apiUrl = _apiUrlFromEnv.isNotEmpty
-  ? _apiUrlFromEnv
-  : (kReleaseMode ? _prodApiUrl : _devApiUrl);
-const Duration requestTimeout = Duration(seconds: 20);
+
+String _resolveApiUrl() {
+  if (_apiUrlFromEnv.isNotEmpty) return _apiUrlFromEnv;
+  if (kReleaseMode) return _prodApiUrl;
+  // Emulador Android: 10.0.2.2 apunta al localhost del host Windows.
+  // 127.0.0.1 desde el emulador es el propio emulador → timeout.
+  if (!kIsWeb && Platform.isAndroid) {
+    return 'http://10.0.2.2:8000/api';
+  }
+  return 'http://127.0.0.1:8000/api';
+}
+
+final String apiUrl = _resolveApiUrl();
+const Duration requestTimeout = Duration(seconds: 30);
 
 /// Fecha local en formato API `Y-m-d` (evita desfase UTC de toIso8601String).
 String formatFechaApi(DateTime fecha) {
@@ -509,10 +519,12 @@ class ApiService {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  debugLog('API URL: $apiUrl (release=${kReleaseMode})');
+
   // Inicializar certificate pinning (opcional pero recomendado)
   await SecureNetworkService.initialize();
-  
+
   runApp(const AsistenciaEstudiantesApp());
 }
 
