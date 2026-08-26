@@ -187,6 +187,8 @@ class ApiService {
     final aula = Map<String, dynamic>.from(item.cast<dynamic, dynamic>());
     final aulaNombre = _extractAulaNombre(aula);
     final materiaNombre = _extractMateriaNombre(aula);
+    final materiaId = _extractMateriaId(aula);
+    final aulaId = _parseInt(aula['aula_id']) ?? _parseInt(aula['id']);
 
     if ((aula['aula_nombre'] == null || aula['aula_nombre'].toString().isEmpty) &&
         aulaNombre != null) {
@@ -198,6 +200,14 @@ class ApiService {
       aula['materia_nombre'] = materiaNombre;
     }
 
+    if (aula['materia_id'] == null && materiaId != null) {
+      aula['materia_id'] = materiaId;
+    }
+
+    if (aula['aula_id'] == null && aulaId != null) {
+      aula['aula_id'] = aulaId;
+    }
+
     if ((aula['nombre_completo'] == null || aula['nombre_completo'].toString().isEmpty) &&
         aulaNombre != null &&
         materiaNombre != null) {
@@ -205,6 +215,53 @@ class ApiService {
     }
 
     return aula;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  static int? _extractMateriaId(Map<String, dynamic> aula) {
+    final direct = _parseInt(aula['materia_id']) ??
+        _parseInt(aula['asignatura_id']) ??
+        _parseInt(aula['subject_id']);
+    if (direct != null) {
+      return direct;
+    }
+
+    for (final key in ['materia', 'asignatura', 'subject']) {
+      final nested = aula[key];
+      if (nested is Map) {
+        final nestedId = _parseInt(nested['id']) ?? _parseInt(nested['materia_id']);
+        if (nestedId != null) {
+          return nestedId;
+        }
+      }
+    }
+
+    for (final key in ['materias', 'asignaturas']) {
+      final list = aula[key];
+      if (list is List && list.isNotEmpty) {
+        final first = list.first;
+        if (first is Map) {
+          final nestedId = _parseInt(first['id']) ?? _parseInt(first['materia_id']);
+          if (nestedId != null) {
+            return nestedId;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   static String? _extractAulaNombre(Map<String, dynamic> aula) {
@@ -1435,8 +1492,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // Soporte para formato nuevo (aula_id) y antiguo (id)
       final aulaId = widget.aula['aula_id'] ?? widget.aula['id'];
       final data = await ApiService.obtenerEstudiantes(aulaId);
+      final Map<int, String> estadosIniciales = {};
+      for (final estudiante in data) {
+        final id = ApiService._parseInt(estudiante is Map ? estudiante['id'] : null);
+        if (id != null) {
+          estadosIniciales[id] = 'Presente';
+        }
+      }
       setState(() {
         estudiantes = data;
+        asistencias = estadosIniciales;
         cargando = false;
       });
     }
@@ -1460,14 +1525,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final aulaIdRaw = widget.aula['aula_id'] ?? widget.aula['id'];
       final aulaId = aulaIdRaw is int ? aulaIdRaw : int.tryParse('${aulaIdRaw ?? ''}');
       
-      // Preparar todas las asistencias para enviar en lote
-      final asistenciasList = estudiantes.map((estudiante) {
-        final estado = asistencias[estudiante['id']] ?? 'Presente';
-        return {
-          'estudiante_id': estudiante['id'],
+      // Preparar todas las asistencias para enviar en lote (mapa por estudiante_id)
+      final asistenciasList = <Map<String, dynamic>>[];
+      for (final estudiante in estudiantes) {
+        final estudianteId = ApiService._parseInt(
+          estudiante is Map ? estudiante['id'] : null,
+        );
+        if (estudianteId == null) {
+          continue;
+        }
+        final estado = asistencias[estudianteId] ?? 'Presente';
+        asistenciasList.add({
+          'estudiante_id': estudianteId,
           'estado': estado.toLowerCase(),
-        };
-      }).toList();
+        });
+      }
 
       if (asistenciasList.isEmpty) {
         setState(() {
@@ -1645,22 +1717,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         itemCount: estudiantes.length,
                         itemBuilder: (context, index) {
                           final estudiante = estudiantes[index];
+                          final estudianteId = ApiService._parseInt(
+                            estudiante is Map ? estudiante['id'] : null,
+                          );
+                          final estadoActual = estudianteId != null
+                              ? (asistencias[estudianteId] ?? 'Presente')
+                              : 'Presente';
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: AsistenciaItem(
-                              estudianteId: estudiante['id'] as int?,
+                              key: ValueKey(estudianteId ?? 'estudiante-$index'),
+                              estudianteId: estudianteId,
                               nombre: estudiante['nombre'] ?? 
                                       estudiante['nombre_completo'] ?? 
                                       estudiante.toString(),
                               fotoUrl: estudiante['foto_url'],
+                              estadoSeleccionado: estadoActual,
                               onFotoActualizada: (nuevaUrl) {
                                 setState(() {
                                   estudiante['foto_url'] = nuevaUrl;
                                 });
                               },
                               onChanged: (estado) {
+                                if (estudianteId == null) {
+                                  return;
+                                }
                                 setState(() {
-                                  asistencias[estudiante['id']] = estado;
+                                  asistencias[estudianteId] = estado;
                                 });
                               },
                             ),
@@ -1789,11 +1872,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final int? estudianteId;
     final String nombre;
     final String? fotoUrl;
+    /// Estado controlado por el padre (mapa por estudiante_id) para no perderse al hacer scroll.
+    final String estadoSeleccionado;
     final void Function(String nuevaFotoUrl)? onFotoActualizada;
     final void Function(String estado)? onChanged;
     const AsistenciaItem({
       super.key,
       required this.nombre,
+      required this.estadoSeleccionado,
       this.estudianteId,
       this.fotoUrl,
       this.onFotoActualizada,
@@ -1805,7 +1891,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   class _AsistenciaItemState extends State<AsistenciaItem> {
-    String estado = 'Presente';
     bool _subiendoFoto = false;
     final ImagePicker _imagePicker = ImagePicker();
     final Map<String, Map<String, dynamic>> estadosConfig = {
@@ -2147,15 +2232,12 @@ class _LoginScreenState extends State<LoginScreen> {
               spacing: 8,
               runSpacing: 8,
               children: estadosConfig.entries.map((entry) {
-                final isSelected = estado == entry.key;
+                final isSelected = widget.estadoSeleccionado == entry.key;
                 final color = entry.value['color'] as Color;
                 final icon = entry.value['icon'] as IconData;
                 
                 return InkWell(
                   onTap: () {
-                    setState(() {
-                      estado = entry.key;
-                    });
                     if (widget.onChanged != null) {
                       widget.onChanged!(entry.key);
                     }
