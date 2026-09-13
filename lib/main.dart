@@ -1173,7 +1173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Â¡Bienvenido!',
+                                            '¡Bienvenido!',
                                             style: TextStyle(
                                               fontSize: 20,
                                               fontWeight: FontWeight.bold,
