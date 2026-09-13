@@ -339,12 +339,13 @@ class ApiService {
     return null;
   }
 
-  static Future<Map<String, dynamic>> obtenerResumenAsistencia(int aulaId, String fecha, int sesion, {int? materiaId}) async {
+  static Future<Map<String, dynamic>> obtenerResumenAsistencia(int aulaId, String fecha, {int? materiaId}) async {
     try {
       final headers = await _getAuthHeaders();
       final materiaParam = materiaId != null ? '&materia_id=$materiaId' : '';
+      // Backend fuerza sesion=1 (un pase por materia/día); se omite el query param.
       final response = await http.get(
-        Uri.parse('$apiUrl/aulas/resumen-asistencia?aula_id=$aulaId&fecha=$fecha&sesion=$sesion$materiaParam'),
+        Uri.parse('$apiUrl/aulas/resumen-asistencia?aula_id=$aulaId&fecha=$fecha$materiaParam'),
         headers: headers,
       ).timeout(requestTimeout);
       if (response.statusCode == 200) {
@@ -369,13 +370,26 @@ class ApiService {
     }
   }
 
-  static Future<List<dynamic>> obtenerEstudiantes(int aulaId) async {
+  /// Lista de estudiantes del aula. Con [fecha]/[materiaId] el API incluye
+  /// `tiene_excusa`, `excusa_motivo` y `estado_asistencia` (pase existente).
+  static Future<List<dynamic>> obtenerEstudiantes(
+    int aulaId, {
+    String? fecha,
+    int? materiaId,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.get(
-        Uri.parse('$apiUrl/aulas/$aulaId/estudiantes'),
-        headers: headers,
-      ).timeout(requestTimeout);
+      final params = <String, String>{};
+      if (fecha != null && fecha.isNotEmpty) {
+        params['fecha'] = fecha;
+      }
+      if (materiaId != null) {
+        params['materia_id'] = '$materiaId';
+      }
+      final uri = Uri.parse('$apiUrl/aulas/$aulaId/estudiantes').replace(
+        queryParameters: params.isEmpty ? null : params,
+      );
+      final response = await http.get(uri, headers: headers).timeout(requestTimeout);
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
@@ -384,6 +398,25 @@ class ApiService {
       debugLog('Error de conexión al obtener estudiantes');
     }
     return [];
+  }
+
+  /// Mapea estado API (`justificada`) a etiqueta UI (`Justificada`).
+  static String etiquetaEstadoAsistencia(String? estadoApi) {
+    switch ((estadoApi ?? '').toLowerCase().trim()) {
+      case 'presente':
+        return 'Presente';
+      case 'ausente':
+        return 'Ausente';
+      case 'tardanza':
+        return 'Tardanza';
+      case 'justificada':
+      case 'justificado':
+        return 'Justificada';
+      case 'retirado':
+        return 'Retirado';
+      default:
+        return 'Presente';
+    }
   }
 
   static Future<Map<String, dynamic>> subirFotoEstudiante(
@@ -438,8 +471,7 @@ class ApiService {
   static Future<bool> registrarAsistencia(
     int estudianteId,
     String estado,
-    String fecha,
-    int sesion, {
+    String fecha, {
     required int materiaId,
     int? aulaId,
   }) async {
@@ -452,7 +484,8 @@ class ApiService {
           'estudiante_id': estudianteId,
           'estado': estado.toLowerCase(),
           'fecha': fecha,
-          'sesion': sesion,
+          // Compat: el backend ignora y fuerza sesion=1.
+          'sesion': 1,
           'materia_id': materiaId,
           if (aulaId != null) 'aula_id': aulaId,
         }),
@@ -466,8 +499,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> registrarAsistenciasBatch(
     List<Map<String, dynamic>> asistencias,
-    String fecha,
-    int sesion, {
+    String fecha, {
     required int materiaId,
     int? aulaId,
   }) async {
@@ -478,7 +510,8 @@ class ApiService {
         headers: headers,
         body: json.encode({
           'fecha': fecha,
-          'sesion': sesion,
+          // Compat: el backend ignora y fuerza sesion=1.
+          'sesion': 1,
           'materia_id': materiaId,
           if (aulaId != null) 'aula_id': aulaId,
           'asistencias': asistencias,
@@ -983,8 +1016,6 @@ class _LoginScreenState extends State<LoginScreen> {
     List aulas = [];
     dynamic aulaSeleccionada;
     DateTime fecha = DateTime.now();
-    int sesion = 1;
-    final List<int> sesiones = List.generate(8, (i) => i + 1);
     bool cargando = true;
     late AnimationController _animationController;
 
@@ -1323,83 +1354,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 24),
-
-                              // Selección de sesión
-                              AppTheme.buildSectionHeader(
-                                title: 'Sesión de Clase',
-                                icon: Icons.schedule_rounded,
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: 70,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: sesiones.length,
-                                  itemBuilder: (context, index) {
-                                    final s = sesiones[index];
-                                    final isSelected = s == sesion;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(right: 12),
-                                      child: InkWell(
-                                        onTap: () => setState(() => sesion = s),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 200),
-                                          width: 70,
-                                          decoration: BoxDecoration(
-                                            gradient: isSelected
-                                                ? AppTheme.primaryGradient
-                                                : null,
-                                            color: isSelected
-                                                ? null
-                                                : Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: isSelected
-                                                  ? Colors.transparent
-                                                  : Colors.grey.shade300,
-                                              width: 2,
-                                            ),
-                                            boxShadow: isSelected
-                                                ? AppTheme.buttonShadow
-                                                : [
-                                                    BoxShadow(
-                                                      color: Colors.black.withValues(alpha: 0.05),
-                                                      blurRadius: 4,
-                                                      offset: const Offset(0, 2),
-                                                    ),
-                                                  ],
-                                          ),
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                Icons.timer_rounded,
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : AppTheme.primaryColor,
-                                                size: 24,
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                '$s',
-                                                style: TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isSelected
-                                                      ? Colors.white
-                                                      : AppTheme.primaryColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
                               const SizedBox(height: 32),
 
                               // Botón continuar
@@ -1438,7 +1392,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                           AsistenciaScreen(
                                         aula: aulaSeleccionada,
                                         fecha: fecha,
-                                        sesion: sesion,
                                       ),
                                       transitionsBuilder:
                                           (context, animation, secondaryAnimation, child) {
@@ -1480,8 +1433,7 @@ class _LoginScreenState extends State<LoginScreen> {
   class AsistenciaScreen extends StatefulWidget {
     final dynamic aula;
     final DateTime fecha;
-    final int sesion;
-    const AsistenciaScreen({super.key, required this.aula, required this.fecha, required this.sesion});
+    const AsistenciaScreen({super.key, required this.aula, required this.fecha});
 
     @override
     State<AsistenciaScreen> createState() => _AsistenciaScreenState();
@@ -1493,6 +1445,7 @@ class _LoginScreenState extends State<LoginScreen> {
     bool cargando = true;
     bool guardando = false;
     String? mensaje;
+    int excusasCount = 0;
 
     @override
     void initState() {
@@ -1502,12 +1455,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
     Future<void> cargarEstudiantes() async {
       // Soporte para formato nuevo (aula_id) y antiguo (id)
-      final aulaId = widget.aula['aula_id'] ?? widget.aula['id'];
-      final data = await ApiService.obtenerEstudiantes(aulaId);
+      final aulaIdRaw = widget.aula['aula_id'] ?? widget.aula['id'];
+      final aulaId = aulaIdRaw is int ? aulaIdRaw : int.tryParse('$aulaIdRaw');
+      final materiaIdRaw = widget.aula['materia_id'];
+      final materiaId = materiaIdRaw is int
+          ? materiaIdRaw
+          : int.tryParse('${materiaIdRaw ?? ''}');
+      final fechaStr = formatFechaApi(widget.fecha);
+
+      if (aulaId == null) {
+        setState(() {
+          estudiantes = [];
+          asistencias = {};
+          cargando = false;
+          excusasCount = 0;
+        });
+        return;
+      }
+
+      final data = await ApiService.obtenerEstudiantes(
+        aulaId,
+        fecha: fechaStr,
+        materiaId: materiaId,
+      );
       final Map<int, String> estadosIniciales = {};
+      var conExcusa = 0;
       for (final estudiante in data) {
-        final id = ApiService._parseInt(estudiante is Map ? estudiante['id'] : null);
-        if (id != null) {
+        if (estudiante is! Map) continue;
+        final id = ApiService._parseInt(estudiante['id']);
+        if (id == null) continue;
+
+        final tieneExcusa = estudiante['tiene_excusa'] == true;
+        if (tieneExcusa) {
+          conExcusa++;
+        }
+
+        final estadoGuardado = estudiante['estado_asistencia']?.toString();
+        if (estadoGuardado != null && estadoGuardado.trim().isNotEmpty) {
+          estadosIniciales[id] = ApiService.etiquetaEstadoAsistencia(estadoGuardado);
+        } else if (tieneExcusa) {
+          estadosIniciales[id] = 'Justificada';
+        } else {
           estadosIniciales[id] = 'Presente';
         }
       }
@@ -1515,6 +1503,7 @@ class _LoginScreenState extends State<LoginScreen> {
         estudiantes = data;
         asistencias = estadosIniciales;
         cargando = false;
+        excusasCount = conExcusa;
       });
     }
 
@@ -1565,7 +1554,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final resultado = await ApiService.registrarAsistenciasBatch(
         asistenciasList,
         formatFechaApi(widget.fecha),
-        widget.sesion,
         materiaId: materiaId,
         aulaId: aulaId,
       );
@@ -1615,8 +1603,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (widget.aula['materia_nombre'] != null)
                           _buildInfoRow('Materia:', widget.aula['materia_nombre']),
                         _buildInfoRow('Fecha:', _formatFecha(widget.fecha)),
-                        _buildInfoRow('Sesión:', 'Sesión ${widget.sesion}'),
                         _buildInfoRow('Estudiantes:', '${estudiantes.length}'),
+                        if (excusasCount > 0)
+                          _buildInfoRow('Excusas:', '$excusasCount'),
                       ],
                     ),
                     actions: [
@@ -1698,6 +1687,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
+
+                  if (excusasCount > 0)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(
+                        AppTheme.paddingMedium,
+                        AppTheme.paddingMedium,
+                        AppTheme.paddingMedium,
+                        0,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.cyan.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.cyan.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.cyan.shade800),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '$excusasCount estudiante(s) con excusa de día completo. '
+                              'Se preseleccionó Justificada (puedes cambiarla).',
+                              style: TextStyle(
+                                color: Colors.cyan.shade900,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   
                   if (estudiantes.isEmpty)
                     Expanded(
@@ -1735,6 +1758,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           final estadoActual = estudianteId != null
                               ? (asistencias[estudianteId] ?? 'Presente')
                               : 'Presente';
+                          final tieneExcusa = estudiante is Map && estudiante['tiene_excusa'] == true;
+                          final motivoExcusa = estudiante is Map
+                              ? estudiante['excusa_motivo']?.toString()
+                              : null;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: AsistenciaItem(
@@ -1745,6 +1772,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                       estudiante.toString(),
                               fotoUrl: estudiante['foto_url'],
                               estadoSeleccionado: estadoActual,
+                              tieneExcusa: tieneExcusa,
+                              excusaMotivo: motivoExcusa,
                               onFotoActualizada: (nuevaUrl) {
                                 setState(() {
                                   estudiante['foto_url'] = nuevaUrl;
@@ -1886,6 +1915,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final String? fotoUrl;
     /// Estado controlado por el padre (mapa por estudiante_id) para no perderse al hacer scroll.
     final String estadoSeleccionado;
+    final bool tieneExcusa;
+    final String? excusaMotivo;
     final void Function(String nuevaFotoUrl)? onFotoActualizada;
     final void Function(String estado)? onChanged;
     const AsistenciaItem({
@@ -1894,6 +1925,8 @@ class _LoginScreenState extends State<LoginScreen> {
       required this.estadoSeleccionado,
       this.estudianteId,
       this.fotoUrl,
+      this.tieneExcusa = false,
+      this.excusaMotivo,
       this.onFotoActualizada,
       this.onChanged,
     });
@@ -2229,12 +2262,56 @@ class _LoginScreenState extends State<LoginScreen> {
                 _buildAvatar(),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    widget.nombre,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.nombre,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (widget.tieneExcusa) ...[
+                        const SizedBox(height: 4),
+                        Tooltip(
+                          message: (widget.excusaMotivo != null &&
+                                  widget.excusaMotivo!.trim().isNotEmpty)
+                              ? widget.excusaMotivo!
+                              : 'Excusa de día completo activa',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.cyan.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.cyan.shade300),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.description_rounded,
+                                  size: 14,
+                                  color: Colors.cyan.shade800,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Excusa',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.cyan.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -2327,8 +2404,6 @@ class _LoginScreenState extends State<LoginScreen> {
     List aulas = [];
     dynamic aulaSeleccionada;
     DateTime fecha = DateTime.now();
-    int sesion = 1;
-    final List<int> sesiones = List.generate(8, (i) => i + 1);
     bool cargando = true;
     bool consultando = false;
     Map<String, dynamic>? resumenAsistencia;
@@ -2411,7 +2486,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final resultado = await ApiService.obtenerResumenAsistencia(
         aulaId,
         format,
-        sesion,
         materiaId: materiaId,
       );
 
@@ -2531,7 +2605,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           const Text(
-                                            'Consulta la asistencia por aula, fecha y sesión.',
+                                            'Consulta la asistencia por aula y fecha.',
                                             style: TextStyle(
                                               color: AppTheme.textSecondary,
                                             ),
@@ -2565,7 +2639,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 24),
                           AppTheme.buildSectionHeader(
                             title: 'Filtros de consulta',
-                            subtitle: 'Selecciona el grupo y la sesión que deseas revisar.',
+                            subtitle: 'Selecciona el grupo y la fecha que deseas revisar.',
                             icon: Icons.tune_rounded,
                           ),
                           const SizedBox(height: 12),
@@ -2657,25 +2731,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                DropdownButtonFormField<int>(
-                                  initialValue: sesion,
-                                  items: sesiones
-                                      .map((sessionValue) => DropdownMenuItem(
-                                            value: sessionValue,
-                                            child: Text('Sesión $sessionValue'),
-                                          ))
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() => sesion = value);
-                                    }
-                                  },
-                                  decoration: _buildInputDecoration(
-                                    label: 'Sesión de clase',
-                                    icon: Icons.schedule_rounded,
                                   ),
                                 ),
                                 const SizedBox(height: 20),
@@ -2877,7 +2932,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               AppTheme.buildSectionHeader(
                 title: 'Detalles de Estudiantes',
-                subtitle: 'Estado individual para la sesión consultada.',
+                subtitle: 'Estado individual para la fecha consultada.',
                 icon: Icons.groups_rounded,
               ),
               const SizedBox(height: 12),
@@ -2899,6 +2954,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     final est = estudiantes[index];
                     final estado = est['estado'] ?? 'no registrada';
                     final colorEstado = _estadoColor(estado.toString());
+                    final tieneExcusa = est['tiene_excusa'] == true;
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -2907,10 +2963,29 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Icon(Icons.person_rounded, color: colorEstado),
                       ),
                       title: Text(est['nombre_completo'] ?? 'Sin nombre'),
-                      subtitle: Text(
-                        est['matricula']?.toString() ?? 'Sin matricula',
-                        style: const TextStyle(color: AppTheme.textSecondary),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            est['matricula']?.toString() ?? 'Sin matricula',
+                            style: const TextStyle(color: AppTheme.textSecondary),
+                          ),
+                          if (tieneExcusa)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Excusa de día completo'
+                                    '${(est['excusa_motivo'] != null && est['excusa_motivo'].toString().trim().isNotEmpty) ? ': ${est['excusa_motivo']}' : ''}',
+                                style: TextStyle(
+                                  color: Colors.cyan.shade800,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
+                      isThreeLine: tieneExcusa,
                       trailing: Chip(
                         label: Text(_capitalizeEstado(estado.toString())),
                         backgroundColor: colorEstado.withValues(alpha: 0.2),
