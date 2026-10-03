@@ -419,11 +419,30 @@ class ApiService {
     }
   }
 
+  /// Nombre con extensión válida: el backend guarda la foto con la extensión del cliente
+  /// y en web el XFile puede venir sin extensión reconocible.
+  static String _nombreArchivoFoto(XFile imagen) {
+    const extensionesValidas = {'jpg', 'jpeg', 'png', 'webp'};
+    final nombre = imagen.name.trim();
+    final punto = nombre.lastIndexOf('.');
+    if (punto > 0 && punto < nombre.length - 1) {
+      final ext = nombre.substring(punto + 1).toLowerCase();
+      if (extensionesValidas.contains(ext)) return nombre;
+    }
+    final ext = switch (imagen.mimeType?.toLowerCase()) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      _ => 'jpg',
+    };
+    return 'foto.$ext';
+  }
+
   static Future<Map<String, dynamic>> subirFotoEstudiante(
     int estudianteId,
-    String filePath,
-    String origen,
-  ) async {
+    XFile imagen,
+    String origen, {
+    Uint8List? bytes,
+  }) async {
     try {
       final token = await SecureAuthService.getToken();
       final request = http.MultipartRequest(
@@ -435,7 +454,11 @@ class ApiService {
         request.headers['Authorization'] = 'Bearer $token';
       }
       request.fields['origen'] = origen;
-      request.files.add(await http.MultipartFile.fromPath('foto', filePath));
+      request.files.add(http.MultipartFile.fromBytes(
+        'foto',
+        bytes ?? await imagen.readAsBytes(),
+        filename: _nombreArchivoFoto(imagen),
+      ));
 
       final streamedResponse = await request.send().timeout(requestTimeout);
       final body = await streamedResponse.stream.bytesToString();
@@ -1979,6 +2002,9 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        final bytes = await imagen.readAsBytes();
+        if (!mounted) return;
+
         final confirmar = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -1988,8 +2014,8 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(imagen.path),
+                  child: Image.memory(
+                    bytes,
                     fit: BoxFit.cover,
                     height: 220,
                     width: double.infinity,
@@ -2024,8 +2050,9 @@ class _LoginScreenState extends State<LoginScreen> {
         final origen = source == ImageSource.camera ? 'camara' : 'galeria';
         final resultado = await ApiService.subirFotoEstudiante(
           widget.estudianteId!,
-          imagen.path,
+          imagen,
           origen,
+          bytes: bytes,
         );
 
         if (!mounted) return;
